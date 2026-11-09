@@ -36,7 +36,7 @@ func (c *Client) GetContractUsage() (ContractUsage, error) {
 		return ContractUsage{}, fmt.Errorf("get contract usage: %w", err)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.send(req)
 	if err != nil {
 		return ContractUsage{}, fmt.Errorf("get contract usage: %w", err)
 	}

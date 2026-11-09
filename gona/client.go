@@ -81,6 +81,27 @@ func apiKeyPath(path, apiKey string) string {
 	return path + "?key=" + apiKey
 }
 
+// withoutKey removes apiKey from the URL that net/url and net/http put in
+// their errors, which Terraform prints. Both APIs take a key only as ?key=:
+// they read an Authorization header as a JWT, answering a key there with
+// "Wrong number of segments" (vapi2) or "The JWT provided in the
+// authorization header is invalid." (vapi3). So every request URL carries the
+// key. Pages after the first re-encode the query, hence the escaped form too.
+func withoutKey(err error, apiKey string) error {
+	var urlErr *url.Error
+	if apiKey == "" || !errors.As(err, &urlErr) {
+		return err
+	}
+	urlErr.URL = strings.NewReplacer(apiKey, "REDACTED", url.QueryEscape(apiKey), "REDACTED").Replace(urlErr.URL)
+	return err
+}
+
+// send is c.client.Do, keeping the key out of the error.
+func (c *Client) send(req *http.Request) (*http.Response, error) {
+	resp, err := c.client.Do(req)
+	return resp, withoutKey(err, c.apiKey)
+}
+
 func (c *Client) debugLog(format string, v ...interface{}) {
 	if os.Getenv("NA_API_DEBUG") == "" {
 		return
@@ -179,7 +200,7 @@ func (c *Client) newRequest(ctx context.Context, method string, path string, bod
 	relPath, err := url.Parse(apiKeyPath(path, c.apiKey))
 
 	if err != nil {
-		return nil, err
+		return nil, withoutKey(err, c.apiKey)
 
 	}
 
@@ -187,14 +208,14 @@ func (c *Client) newRequest(ctx context.Context, method string, path string, bod
 
 	req, err := http.NewRequestWithContext(ctx, method, url.String(), body)
 	if err != nil {
-		return nil, err
+		return nil, withoutKey(err, c.apiKey)
 
 	}
 
 	req.Header.Add("User-Agent", c.userAgent)
 	req.Header.Add("Accept", ContentType)
 
-	c.debugLog("making a %s request to %s", method, url)
+	c.debugLog("making a %s request to %s", method, redactURL(url))
 	return req, nil
 }
 
@@ -286,7 +307,7 @@ func IsContractError(err error) bool {
 
 // do internal method on Client struct for making the HTTP calls
 func (c *Client) do(req *http.Request, data interface{}) error {
-	resp, err := c.client.Do(req)
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
@@ -547,7 +568,7 @@ func (c *Client) getV2PaginatorPageData(req *http.Request, page int) (json.RawMe
 	q.Set("page", strconv.Itoa(page))
 	pageReq.URL.RawQuery = q.Encode()
 
-	resp, err := c.client.Do(pageReq)
+	resp, err := c.send(pageReq)
 	if err != nil {
 		return nil, err
 	}

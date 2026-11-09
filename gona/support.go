@@ -295,7 +295,7 @@ func (c *Client) getRaw(ctx context.Context, path string) ([]byte, error) {
 		return nil, err
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.send(req)
 	if err != nil {
 		return nil, err
 	}

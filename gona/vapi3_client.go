@@ -115,14 +115,14 @@ func (c *V3Client) doRequest(method, path string, body interface{}) (*V3APIRespo
 
 	relPath, err := url.Parse(c.v3ApiKeyPath(path))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse path %q: %w", path, err)
+		return nil, fmt.Errorf("failed to parse path %q: %w", path, withoutKey(err, c.apiKey))
 	}
 
 	fullURL := c.baseURL.ResolveReference(relPath)
 
 	req, err := http.NewRequest(method, fullURL.String(), bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", withoutKey(err, c.apiKey))
 	}
 
 	req.Header.Set("User-Agent", c.userAgent)
@@ -135,7 +135,7 @@ func (c *V3Client) doRequest(method, path string, body interface{}) (*V3APIRespo
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("request failed: %w", withoutKey(err, c.apiKey))
 	}
 	defer resp.Body.Close()
 
